@@ -1,0 +1,35 @@
+import java.math.BigInteger;
+import java.util.Scanner;
+
+public class PrimeCheckerScanner {
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("請輸入大於1的整數 (2~10^20)：");
+        String input = scanner.nextLine();
+
+        try {
+            BigInteger num = parseAndValidateInput(input);
+            boolean isPrime = num.isProbablePrime(10);
+            System.out.println("質數判斷結果：" + isPrime);
+        } catch (IllegalArgumentException e) {
+            System.out.println("輸入錯誤：" + e.getMessage());
+        }
+    }
+
+    private static BigInteger parseAndValidateInput(String input) {
+        try {
+            BigInteger num = new BigInteger(input);
+            if (num.compareTo(BigInteger.TWO) < 0) {
+                throw new IllegalArgumentException("數字必須 ≥ 2");
+            }
+            BigInteger upperLimit = new BigInteger("100000000000000000000");
+            if (num.compareTo(upperLimit) > 0) {
+                throw new IllegalArgumentException("數字不能超過 10^20");
+            }
+            return num;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("輸入必須是有效的整數", e);
+        }
+    }
+}

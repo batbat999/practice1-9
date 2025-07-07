@@ -1,0 +1,86 @@
+import java.util.Scanner;
+
+public class MortgageCalculator {
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+
+        System.out.print("輸入貸款金額（萬）：");
+        String amountStr = scanner.nextLine();
+        System.out.print("輸入貸款期數（月）：");
+        String monthsStr = scanner.nextLine();
+        System.out.print("輸入年利率（1~3%格式#.##%）：");
+        String rateStr = scanner.nextLine();
+        System.out.print("輸入寬限期（月，若無請輸入0）：");
+        String graceStr = scanner.nextLine();
+
+        try {
+            double principal = parseAmount(amountStr);
+            int totalMonths = parseMonths(monthsStr);
+            double annualRate = parseRate(rateStr);
+            int graceMonths = parseGrace(graceStr, totalMonths);
+
+            if (graceMonths == 0) {
+                calculateSingleStage(principal, totalMonths, annualRate);
+            } else {
+                calculateSingleStageWithGrace(principal, totalMonths, annualRate, graceMonths);
+            }
+        } catch (IllegalArgumentException e) {
+            System.out.println("輸入錯誤：" + e.getMessage());
+        }
+    }
+
+    private static double parseAmount(String str) {
+        double val = Double.parseDouble(str);
+        if (val <= 0) throw new IllegalArgumentException("貸款金額需大於0");
+        return val * 10000; // 單位換成元
+    }
+
+    private static int parseMonths(String str) {
+        int val = Integer.parseInt(str);
+        if (val <= 0) throw new IllegalArgumentException("貸款月數需大於0");
+        return val;
+    }
+
+    private static double parseRate(String str) {
+        if (!str.endsWith("%")) throw new IllegalArgumentException("利率需以%結尾");
+        double val = Double.parseDouble(str.replace("%", ""));
+        if (val < 1 || val > 3) throw new IllegalArgumentException("利率需介於1%~3%");
+        return val / 100; // 轉成小數
+    }
+
+    private static int parseGrace(String str, int totalMonths) {
+        int val = Integer.parseInt(str);
+        if (val < 0 || val > totalMonths) throw new IllegalArgumentException("寬限期月數需介於0到總貸款月數");
+        return val;
+    }
+
+    private static void calculateSingleStage(double principal, int months, double annualRate) {
+        double monthlyRate = annualRate / 12;
+        double factor = Math.pow(1 + monthlyRate, months);
+        double monthlyPayment = principal * monthlyRate * factor / (factor - 1);
+        double totalPayment = monthlyPayment * months;
+        double totalInterest = totalPayment - principal;
+
+        System.out.printf("每月還款：%.2f 元%n", monthlyPayment);
+        System.out.printf("最後一期還款：%.2f 元%n", monthlyPayment);
+        System.out.printf("總利息：%.2f 元%n", totalInterest);
+    }
+
+    private static void calculateSingleStageWithGrace(double principal, int months, double annualRate, int graceMonths) {
+        double monthlyRate = annualRate / 12;
+        double interestDuringGrace = principal * monthlyRate;
+        double totalInterestGrace = interestDuringGrace * graceMonths;
+
+        int repayMonths = months - graceMonths;
+        double factor = Math.pow(1 + monthlyRate, repayMonths);
+        double monthlyPaymentAfterGrace = principal * monthlyRate * factor / (factor - 1);
+        double totalPaymentAfterGrace = monthlyPaymentAfterGrace * repayMonths;
+        double totalInterestAfterGrace = totalPaymentAfterGrace - principal;
+
+        System.out.printf("寬限期每月利息：%.2f 元%n", interestDuringGrace);
+        System.out.printf("寬限期後每月還款：%.2f 元%n", monthlyPaymentAfterGrace);
+        System.out.printf("最後一期還款：%.2f 元%n", monthlyPaymentAfterGrace);
+        System.out.printf("總繳利息：%.2f 元%n", totalInterestGrace + totalInterestAfterGrace);
+    }
+}

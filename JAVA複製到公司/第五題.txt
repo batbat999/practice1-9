@@ -1,0 +1,39 @@
+import java.util.*;
+
+public class NumberSorter {
+
+    public static void main(String[] args) {
+        Set<Integer> firstDraw = drawNumbers(10, new HashSet<>());
+        System.out.println("第一次抽號結果：" + firstDraw);
+        printSortedMultipleTimes(firstDraw, 10);
+
+        Set<Integer> secondDraw = drawNumbers(10, firstDraw);
+        System.out.println("第二次抽號結果：" + secondDraw);
+
+        Set<Integer> combined = new HashSet<>(firstDraw);
+        combined.addAll(secondDraw);
+        printSortedMultipleTimes(combined, 10);
+    }
+
+    // 抽n個不重複號碼(與alreadyDrawn中的號碼不能重複)
+    private static Set<Integer> drawNumbers(int n, Set<Integer> alreadyDrawn) {
+        Random rand = new Random();
+        Set<Integer> result = new HashSet<>();
+        while (result.size() < n) {
+            int num = rand.nextInt(100) + 1; // 1~100
+            if (!alreadyDrawn.contains(num) && !result.contains(num)) {
+                result.add(num);
+            }
+        }
+        return result;
+    }
+
+    // 排序結果，並重複印n次
+    private static void printSortedMultipleTimes(Set<Integer> numbers, int times) {
+        List<Integer> sorted = new ArrayList<>(numbers);
+        Collections.sort(sorted);
+        for (int i = 1; i <= times; i++) {
+            System.out.println("第" + i + "次排序結果：" + sorted);
+        }
+    }
+}
