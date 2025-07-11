@@ -1,0 +1,165 @@
+第九題2
+import java.io.FileWriter;
+import java.sql.*;
+import java.util.*;
+
+public class ExportSummaryReport {
+    static class Building {
+        String address;
+        double area;
+        String city;
+        int unitPrice;
+        double value;
+
+        Building(String address, double area) {
+            this.address = address;
+            this.area = area;
+            this.city = extractCity(address);
+        }
+
+        void setUnitPrice(int price) {
+            this.unitPrice = price;
+            this.value = price * area;
+        }
+
+        static String extractCity(String address) {
+            return address.substring(0, 3);
+        }
+    }
+
+    public static void main(String[] args) {
+        List<Building> all = new ArrayList<>();
+
+        try {
+            Connection conn = getConnection();
+
+            // 1. 抓建物資料
+            String sql = "SELECT address, area FROM building_info";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                String addr = rs.getString("address");
+                double area = rs.getDouble("area");
+                all.add(new Building(addr, area));
+            }
+            rs.close(); stmt.close();
+
+            // 2. 查單價
+            for (Building b : all) {
+                String q = "SELECT unit_price FROM unit_price WHERE city = ?";
+                PreparedStatement p = conn.prepareStatement(q);
+                p.setString(1, b.city);
+                ResultSet r = p.executeQuery();
+                if (r.next()) {
+                    b.setUnitPrice(r.getInt("unit_price"));
+                } else {
+                    b.setUnitPrice(0);
+                }
+                r.close(); p.close();
+            }
+            conn.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        if (all.isEmpty()) {
+            System.out.println("沒有資料！");
+            return;
+        }
+
+        // 建立統計用 Map：city -> list of buildings
+        Map<String, List<Building>> byCity = new HashMap<>();
+        for (Building b : all) {
+            byCity.computeIfAbsent(b.city, k -> new ArrayList<>()).add(b);
+        }
+
+        // 統計
+        StringBuilder report = new StringBuilder();
+        report.append("本次分析共計 ").append(all.size()).append(" 筆資料，其中：\n\n");
+
+        int maxCount = 0, minCount = Integer.MAX_VALUE;
+        String maxCountCity = "", minCountCity = "";
+
+        double maxTotalValue = 0, minTotalValue = Double.MAX_VALUE;
+        String maxTotalCity = "", minTotalCity = "";
+
+        double maxAvgValue = 0;
+        String maxAvgCity = "";
+
+        Building maxValueBuilding = null, minValueBuilding = null;
+
+        for (Map.Entry<String, List<Building>> entry : byCity.entrySet()) {
+            String city = entry.getKey();
+            List<Building> buildings = entry.getValue();
+            int count = buildings.size();
+            double totalValue = 0;
+
+            for (Building b : buildings) {
+                totalValue += b.value;
+                if (maxValueBuilding == null || b.value > maxValueBuilding.value)
+                    maxValueBuilding = b;
+                if (minValueBuilding == null || b.value < minValueBuilding.value)
+                    minValueBuilding = b;
+            }
+
+            double avgValue = totalValue / count;
+
+            report.append(city).append(" ").append(count).append(" 筆\n");
+
+            // 比較用
+            if (count > maxCount) {
+                maxCount = count;
+                maxCountCity = city;
+            }
+            if (count < minCount) {
+                minCount = count;
+                minCountCity = city;
+            }
+            if (totalValue > maxTotalValue) {
+                maxTotalValue = totalValue;
+                maxTotalCity = city;
+            }
+            if (totalValue < minTotalValue) {
+                minTotalValue = totalValue;
+                minTotalCity = city;
+            }
+            if (avgValue > maxAvgValue) {
+                maxAvgValue = avgValue;
+                maxAvgCity = city;
+            }
+        }
+
+        report.append("\n");
+        report.append("擁有最多建物數量：").append(maxCountCity).append("，共 ").append(maxCount).append(" 筆\n");
+        report.append("擁有最少建物數量：").append(minCountCity).append("，共 ").append(minCount).append(" 筆\n");
+        report.append("擁有最高總價值值：").append(maxTotalCity).append("，總價值為 ").append(formatValue(maxTotalValue)).append(" 萬\n");
+        report.append("擁有最低總價值值：").append(minTotalCity).append("，總價值為 ").append(formatValue(minTotalValue)).append(" 萬\n");
+        report.append("擁有最高單價價值：").append(maxValueBuilding.city).append("，價值為 ")
+                .append(formatValue(maxValueBuilding.value)).append(" 萬，地址為 ").append(maxValueBuilding.address).append("\n");
+        report.append("擁有最低單價價值：").append(minValueBuilding.city).append("，價值為 ")
+                .append(formatValue(minValueBuilding.value)).append(" 萬，地址為 ").append(minValueBuilding.address).append("\n");
+        report.append("平均建物價值最高城市為：").append(maxAvgCity).append("，平均價格為 ")
+                .append(formatValue(maxAvgValue)).append(" 萬\n");
+
+        // 輸出成檔案
+        try (FileWriter writer = new FileWriter("summary_report.txt")) {
+            writer.write(report.toString());
+            System.out.println("報表已輸出為 summary_report.txt");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    static String formatValue(double v) {
+        return String.format("%.2f", v / 10000); // 轉成「萬」
+    }
+
+    static Connection getConnection() throws Exception {
+        String url = "jdbc:oracle:thin:@localhost:1521:xe";
+        String user = "your_username";
+        String password = "your_password";
+        Class.forName("oracle.jdbc.driver.OracleDriver");
+        return DriverManager.getConnection(url, user, password);
+    }
+}

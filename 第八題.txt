@@ -1,0 +1,58 @@
+第八題
+public class BuildingInfo {
+    public int id;
+    public String address;
+    public double area;
+    public String city;
+    public double unitPrice;
+    public double totalPrice;
+
+    public BuildingInfo(int id, String address, double area, String city, double unitPrice) {
+        this.id = id;
+        this.address = address;
+        this.area = area;
+        this.city = city;
+        this.unitPrice = unitPrice;
+        this.totalPrice = area * unitPrice;
+    }
+}
+
+String sql = "SELECT id, address, area FROM building_data";
+PreparedStatement stmt = conn.prepareStatement(sql);
+ResultSet rs = stmt.executeQuery();
+
+Map<String, Double> cityUnitPriceMap = loadUnitPriceMap(conn); // 建立 city -> unit_price 對照
+
+List<BuildingInfo> buildingList = new ArrayList<>();
+
+while (rs.next()) {
+    int id = rs.getInt("id");
+    String address = rs.getString("address");
+    double area = rs.getDouble("area");
+
+    String city = parseCityFromAddress(address);  // 你可以先用簡單的 contains 比對處理
+    double unitPrice = cityUnitPriceMap.getOrDefault(city, 0.0);
+
+    buildingList.add(new BuildingInfo(id, address, area, city, unitPrice));
+}
+
+private Map<String, Double> loadUnitPriceMap(Connection conn) throws SQLException {
+    Map<String, Double> map = new HashMap<>();
+    String sql = "SELECT city, unit_price FROM unit_price_data";
+    PreparedStatement stmt = conn.prepareStatement(sql);
+    ResultSet rs = stmt.executeQuery();
+    while (rs.next()) {
+        map.put(rs.getString("city"), rs.getDouble("unit_price"));
+    }
+    return map;
+}
+
+private String parseCityFromAddress(String address) {
+    String[] cities = {"台北市", "新北市", "桃園市", "台中市", "台南市", "高雄市"};
+    for (String city : cities) {
+        if (address.contains(city)) {
+            return city;
+        }
+    }
+    return "未知";
+}

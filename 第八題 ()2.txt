@@ -1,0 +1,117 @@
+第八題 ()2
+import java.sql.*;
+import java.util.*;
+
+public class BuildingReport {
+    static class Building {
+        String address;
+        double area;
+        String city;
+        int unitPrice;
+        double value;
+
+        Building(String address, double area) {
+            this.address = address;
+            this.area = area;
+            this.city = extractCity(address);
+        }
+
+        void setUnitPrice(int price) {
+            this.unitPrice = price;
+            this.value = price * area;
+        }
+
+        static String extractCity(String address) {
+            return address.substring(0, 3); // 假設縣市是前3字
+        }
+    }
+
+    public static void main(String[] args) {
+        List<Building> list = new ArrayList<>();
+
+        try {
+            Connection conn = getConnection();
+
+            // 1. 讀取建物資料
+            String sql1 = "SELECT address, area FROM building_info";
+            PreparedStatement stmt1 = conn.prepareStatement(sql1);
+            ResultSet rs1 = stmt1.executeQuery();
+
+            while (rs1.next()) {
+                String addr = rs1.getString("address");
+                double area = rs1.getDouble("area");
+                list.add(new Building(addr, area));
+            }
+
+            rs1.close(); stmt1.close();
+
+            // 2. 查單價並計算價值
+            for (Building b : list) {
+                String sql2 = "SELECT unit_price FROM unit_price WHERE city = ?";
+                PreparedStatement stmt2 = conn.prepareStatement(sql2);
+                stmt2.setString(1, b.city);
+                ResultSet rs2 = stmt2.executeQuery();
+
+                if (rs2.next()) {
+                    b.setUnitPrice(rs2.getInt("unit_price"));
+                } else {
+                    b.setUnitPrice(0); // 沒資料預設0
+                }
+
+                rs2.close(); stmt2.close();
+            }
+
+            conn.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // 3. 統計報表
+        if (list.isEmpty()) {
+            System.out.println("查無資料");
+            return;
+        }
+
+        List<Double> areas = new ArrayList<>();
+        List<Double> values = new ArrayList<>();
+        double totalArea = 0, totalValue = 0;
+        Building max = null, min = null;
+
+        for (Building b : list) {
+            areas.add(b.area);
+            values.add(b.value);
+            totalArea += b.area;
+            totalValue += b.value;
+
+            if (max == null || b.value > max.value) max = b;
+            if (min == null || b.value < min.value) min = b;
+        }
+
+        Collections.sort(areas);
+        Collections.sort(values);
+
+        System.out.println("建物數量：" + list.size());
+        System.out.println("總面積：" + totalArea);
+        System.out.println("平均面積：" + totalArea / list.size());
+        System.out.println("中位數面積：" + median(areas));
+        System.out.println("總價值：" + totalValue);
+        System.out.println("平均價值：" + totalValue / list.size());
+        System.out.println("中位數價值：" + median(values));
+        System.out.println("最有價值建物：" + max.address + "，總價：" + max.value);
+        System.out.println("最沒價值建物：" + min.address + "，總價：" + min.value);
+    }
+
+    static double median(List<Double> list) {
+        int n = list.size();
+        if (n % 2 == 1) return list.get(n / 2);
+        return (list.get(n / 2 - 1) + list.get(n / 2)) / 2;
+    }
+
+    static Connection getConnection() throws Exception {
+        String url = "jdbc:oracle:thin:@localhost:1521:xe";
+        String user = "your_username";
+        String password = "your_password";
+        Class.forName("oracle.jdbc.driver.OracleDriver");
+        return DriverManager.getConnection(url, user, password);
+    }
+}

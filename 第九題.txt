@@ -1,0 +1,90 @@
+第九題
+Map<String, List<BuildingInfo>> cityMap = new HashMap<>();
+
+for (BuildingInfo b : buildingList) {
+    cityMap.computeIfAbsent(b.city, k -> new ArrayList<>()).add(b);
+}
+
+public class CityStats {
+    public String city;
+    public int count;
+    public double totalArea;
+    public double avgArea;
+    public double medianArea;
+    public double totalPrice;
+    public double avgPrice;
+    public double medianPrice;
+    public BuildingInfo maxTotalPriceBuilding;
+    public BuildingInfo minTotalPriceBuilding;
+    public BuildingInfo maxUnitPriceBuilding;
+    public BuildingInfo minUnitPriceBuilding;
+}
+
+public CityStats calculateStats(String city, List<BuildingInfo> list) {
+    CityStats stats = new CityStats();
+    stats.city = city;
+    stats.count = list.size();
+
+    list.sort(Comparator.comparingDouble(b -> b.area));
+    stats.totalArea = list.stream().mapToDouble(b -> b.area).sum();
+    stats.avgArea = stats.totalArea / stats.count;
+    stats.medianArea = list.get(stats.count / 2).area;
+
+    list.sort(Comparator.comparingDouble(b -> b.totalPrice));
+    stats.totalPrice = list.stream().mapToDouble(b -> b.totalPrice).sum();
+    stats.avgPrice = stats.totalPrice / stats.count;
+    stats.medianPrice = list.get(stats.count / 2).totalPrice;
+
+    stats.maxTotalPriceBuilding = Collections.max(list, Comparator.comparingDouble(b -> b.totalPrice));
+    stats.minTotalPriceBuilding = Collections.min(list, Comparator.comparingDouble(b -> b.totalPrice));
+    stats.maxUnitPriceBuilding = Collections.max(list, Comparator.comparingDouble(b -> b.unitPrice));
+    stats.minUnitPriceBuilding = Collections.min(list, Comparator.comparingDouble(b -> b.unitPrice));
+
+    return stats;
+}
+
+CityStats maxCountCity = null;
+CityStats minCountCity = null;
+double highestAvgPrice = 0;
+String cityWithHighestAvgPrice = "";
+
+for (String city : cityMap.keySet()) {
+    CityStats stats = calculateStats(city, cityMap.get(city));
+    // 找最多建物數/最少建物數城市
+    if (maxCountCity == null || stats.count > maxCountCity.count) maxCountCity = stats;
+    if (minCountCity == null || stats.count < minCountCity.count) minCountCity = stats;
+
+    if (stats.avgPrice > highestAvgPrice) {
+        highestAvgPrice = stats.avgPrice;
+        cityWithHighestAvgPrice = city;
+    }
+
+    allStats.add(stats);  // 如果你要彙整
+}
+
+StringBuilder sb = new StringBuilder();
+sb.append("本次分析共計 ").append(buildingList.size()).append(" 筆資料，其中：\n");
+
+for (String city : cityMap.keySet()) {
+    sb.append(city).append(" ").append(cityMap.get(city).size()).append(" 筆\n");
+}
+
+sb.append("\n擁有最多建物數量：").append(maxCountCity.city).append("，共 ").append(maxCountCity.count).append(" 筆\n");
+sb.append("擁有最少建物數量：").append(minCountCity.city).append("，共 ").append(minCountCity.count).append(" 筆\n");
+
+sb.append("擁有最高總價值值：").append(maxCountCity.city).append("，總價值為 ").append((int)maxCountCity.totalPrice).append(" 萬\n");
+sb.append("擁有最低總價值值：").append(minCountCity.city).append("，總價值為 ").append((int)minCountCity.totalPrice).append(" 萬\n");
+
+sb.append("擁有最高單價價值：").append(maxCountCity.maxUnitPriceBuilding.city)
+  .append("，價值為 ").append(maxCountCity.maxUnitPriceBuilding.unitPrice)
+  .append(" 萬，地址為 ").append(maxCountCity.maxUnitPriceBuilding.address).append("\n");
+
+sb.append("擁有最低單價價值：").append(maxCountCity.minUnitPriceBuilding.city)
+  .append("，價值為 ").append(maxCountCity.minUnitPriceBuilding.unitPrice)
+  .append(" 萬，地址為 ").append(maxCountCity.minUnitPriceBuilding.address).append("\n");
+
+sb.append("平均建物價值最高城市為：").append(cityWithHighestAvgPrice).append("，平均價格為 ").append(highestAvgPrice).append(" 萬");
+
+BufferedWriter writer = new BufferedWriter(new FileWriter("report.txt"));
+writer.write(sb.toString());
+writer.close();
