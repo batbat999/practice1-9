@@ -1,0 +1,24 @@
+static class Building {
+        private String address;
+        private double area;
+
+        public Building(String address, double area) {
+            this.address = address;
+            this.area = area;
+        }
+        public String getAddress() { return address; }
+        public double getArea() { return area; }
+    }
+
+    // 中位數計算
+    static double getMedian(List<Double> list) {
+        List<Double> sorted = new ArrayList<>(list);
+        Collections.sort(sorted);
+        int n = sorted.size();
+        if (n % 2 == 1) {
+            return sorted.get(n / 2);
+        } else {
+            return (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2.0;
+        }
+    }
+}
