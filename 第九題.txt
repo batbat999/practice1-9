@@ -1,90 +1,136 @@
 第九題
-Map<String, List<BuildingInfo>> cityMap = new HashMap<>();
+import java.sql.*;
+import java.util.*;
+import java.io.*;
 
-for (BuildingInfo b : buildingList) {
-    cityMap.computeIfAbsent(b.city, k -> new ArrayList<>()).add(b);
-}
+public class ReportGenerator {
+    public static void main(String[] args) throws Exception {
+        String url = "jdbc:mysql://localhost:3306/testdb";
+        String user = "root";
+        String password = "Mysql123!";
+        Connection conn = DriverManager.getConnection(url, user, password);
 
-public class CityStats {
-    public String city;
-    public int count;
-    public double totalArea;
-    public double avgArea;
-    public double medianArea;
-    public double totalPrice;
-    public double avgPrice;
-    public double medianPrice;
-    public BuildingInfo maxTotalPriceBuilding;
-    public BuildingInfo minTotalPriceBuilding;
-    public BuildingInfo maxUnitPriceBuilding;
-    public BuildingInfo minUnitPriceBuilding;
-}
+        // 1. 查詢所有城市
+        List<String> cityList = new ArrayList<>();
+        PreparedStatement cityStmt = conn.prepareStatement("SELECT DISTINCT city FROM A");
+        ResultSet cityRs = cityStmt.executeQuery();
+        while (cityRs.next()) cityList.add(cityRs.getString("city"));
 
-public CityStats calculateStats(String city, List<BuildingInfo> list) {
-    CityStats stats = new CityStats();
-    stats.city = city;
-    stats.count = list.size();
+        // 2. 對每個城市做統計
+        List<CityStat> stats = new ArrayList<>();
+        for (String city : cityList) {
+            // 取得單價
+            PreparedStatement priceStmt = conn.prepareStatement("SELECT price FROM A WHERE city = ?");
+            priceStmt.setString(1, city);
+            ResultSet priceRs = priceStmt.executeQuery();
+            if (!priceRs.next()) continue;
+            int cityPrice = priceRs.getInt("price");
 
-    list.sort(Comparator.comparingDouble(b -> b.area));
-    stats.totalArea = list.stream().mapToDouble(b -> b.area).sum();
-    stats.avgArea = stats.totalArea / stats.count;
-    stats.medianArea = list.get(stats.count / 2).area;
+            // 取得所有建物
+            PreparedStatement bStmt = conn.prepareStatement("SELECT address, area FROM B WHERE LEFT(address, 3)=?");
+            bStmt.setString(1, city);
+            ResultSet bRs = bStmt.executeQuery();
 
-    list.sort(Comparator.comparingDouble(b -> b.totalPrice));
-    stats.totalPrice = list.stream().mapToDouble(b -> b.totalPrice).sum();
-    stats.avgPrice = stats.totalPrice / stats.count;
-    stats.medianPrice = list.get(stats.count / 2).totalPrice;
+            List<Building> buildingList = new ArrayList<>();
+            List<Double> valueList = new ArrayList<>();
+            while (bRs.next()) {
+                String address = bRs.getString("address");
+                int area = bRs.getInt("area");
+                buildingList.add(new Building(address, area));
+                valueList.add((double)area * cityPrice);
+            }
 
-    stats.maxTotalPriceBuilding = Collections.max(list, Comparator.comparingDouble(b -> b.totalPrice));
-    stats.minTotalPriceBuilding = Collections.min(list, Comparator.comparingDouble(b -> b.totalPrice));
-    stats.maxUnitPriceBuilding = Collections.max(list, Comparator.comparingDouble(b -> b.unitPrice));
-    stats.minUnitPriceBuilding = Collections.min(list, Comparator.comparingDouble(b -> b.unitPrice));
+            int num = buildingList.size();
+            double totalValue = valueList.stream().mapToDouble(Double::doubleValue).sum();
+            double avgValue = num > 0 ? totalValue / num : 0;
 
-    return stats;
-}
+            // 最貴、最便宜建物
+            double maxValue = valueList.isEmpty() ? 0 : Collections.max(valueList);
+            double minValue = valueList.isEmpty() ? 0 : Collections.min(valueList);
+            String maxAddr = "";
+            String minAddr = "";
+            for (int i = 0; i < valueList.size(); i++) {
+                if (valueList.get(i) == maxValue) maxAddr = buildingList.get(i).getAddress();
+                if (valueList.get(i) == minValue) minAddr = buildingList.get(i).getAddress();
+            }
 
-CityStats maxCountCity = null;
-CityStats minCountCity = null;
-double highestAvgPrice = 0;
-String cityWithHighestAvgPrice = "";
+            stats.add(new CityStat(city, num, totalValue, avgValue, maxValue, maxAddr, minValue, minAddr));
+        }
 
-for (String city : cityMap.keySet()) {
-    CityStats stats = calculateStats(city, cityMap.get(city));
-    // 找最多建物數/最少建物數城市
-    if (maxCountCity == null || stats.count > maxCountCity.count) maxCountCity = stats;
-    if (minCountCity == null || stats.count < minCountCity.count) minCountCity = stats;
+        // 3. 跨城市統計
+        CityStat mostBuilding = Collections.max(stats, Comparator.comparing(s -> s.count));
+        CityStat leastBuilding = Collections.min(stats, Comparator.comparing(s -> s.count));
+        CityStat maxTotal = Collections.max(stats, Comparator.comparing(s -> s.totalValue));
+        CityStat minTotal = Collections.min(stats, Comparator.comparing(s -> s.totalValue));
+        CityStat maxAvg = Collections.max(stats, Comparator.comparing(s -> s.avgValue));
 
-    if (stats.avgPrice > highestAvgPrice) {
-        highestAvgPrice = stats.avgPrice;
-        cityWithHighestAvgPrice = city;
+        // 最高/最低單價建物（全縣市搜尋）
+        String maxValueCity = "", maxValueAddr = "";
+        String minValueCity = "", minValueAddr = "";
+        double maxValue = Double.MIN_VALUE, minValue = Double.MAX_VALUE;
+        for (CityStat stat : stats) {
+            if (stat.maxValue > maxValue) {
+                maxValue = stat.maxValue;
+                maxValueCity = stat.city;
+                maxValueAddr = stat.maxAddr;
+            }
+            if (stat.minValue < minValue) {
+                minValue = stat.minValue;
+                minValueCity = stat.city;
+                minValueAddr = stat.minAddr;
+            }
+        }
+
+        // 4. 組字串
+        StringBuilder sb = new StringBuilder();
+        sb.append("擁有最多建物數量：").append(mostBuilding.city).append("，共").append(mostBuilding.count).append("筆\n");
+        sb.append("擁有最少建物數量：").append(leastBuilding.city).append("，共").append(leastBuilding.count).append("筆\n");
+        sb.append("擁有最高總價值：").append(maxTotal.city).append("，總價值為").append((int)maxTotal.totalValue).append("萬\n");
+        sb.append("擁有最低總價值：").append(minTotal.city).append("，總價值為").append((int)minTotal.totalValue).append("萬\n");
+        sb.append("擁有最高單價建物：").append(maxValueCity).append("，價值為").append((int)maxValue).append("萬，地址為").append(maxValueAddr).append("\n");
+        sb.append("擁有最低單價建物：").append(minValueCity).append("，價值為").append((int)minValue).append("萬，地址為").append(minValueAddr).append("\n");
+        sb.append("平均建物價值最高城市為：").append(maxAvg.city).append("，平均價格為").append((int)maxAvg.avgValue).append("萬\n");
+
+        // 5. 輸出到文字檔
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("city_report.txt"))) {
+            writer.write(sb.toString());
+        }
+        System.out.println("報表已匯出：city_report.txt");
+
+        conn.close();
     }
 
-    allStats.add(stats);  // 如果你要彙整
+    // CityStat 統計類
+    static class CityStat {
+        String city;
+        int count;
+        double totalValue;
+        double avgValue;
+        double maxValue, minValue;
+        String maxAddr, minAddr;
+
+        public CityStat(String city, int count, double totalValue, double avgValue,
+                        double maxValue, String maxAddr, double minValue, String minAddr) {
+            this.city = city;
+            this.count = count;
+            this.totalValue = totalValue;
+            this.avgValue = avgValue;
+            this.maxValue = maxValue;
+            this.maxAddr = maxAddr;
+            this.minValue = minValue;
+            this.minAddr = minAddr;
+        }
+    }
+
+    // 建物類
+    static class Building {
+        private String address;
+        private int area;
+        public Building(String address, int area) {
+            this.address = address;
+            this.area = area;
+        }
+        public String getAddress() { return address; }
+        public int getArea() { return area; }
+    }
 }
-
-StringBuilder sb = new StringBuilder();
-sb.append("本次分析共計 ").append(buildingList.size()).append(" 筆資料，其中：\n");
-
-for (String city : cityMap.keySet()) {
-    sb.append(city).append(" ").append(cityMap.get(city).size()).append(" 筆\n");
-}
-
-sb.append("\n擁有最多建物數量：").append(maxCountCity.city).append("，共 ").append(maxCountCity.count).append(" 筆\n");
-sb.append("擁有最少建物數量：").append(minCountCity.city).append("，共 ").append(minCountCity.count).append(" 筆\n");
-
-sb.append("擁有最高總價值值：").append(maxCountCity.city).append("，總價值為 ").append((int)maxCountCity.totalPrice).append(" 萬\n");
-sb.append("擁有最低總價值值：").append(minCountCity.city).append("，總價值為 ").append((int)minCountCity.totalPrice).append(" 萬\n");
-
-sb.append("擁有最高單價價值：").append(maxCountCity.maxUnitPriceBuilding.city)
-  .append("，價值為 ").append(maxCountCity.maxUnitPriceBuilding.unitPrice)
-  .append(" 萬，地址為 ").append(maxCountCity.maxUnitPriceBuilding.address).append("\n");
-
-sb.append("擁有最低單價價值：").append(maxCountCity.minUnitPriceBuilding.city)
-  .append("，價值為 ").append(maxCountCity.minUnitPriceBuilding.unitPrice)
-  .append(" 萬，地址為 ").append(maxCountCity.minUnitPriceBuilding.address).append("\n");
-
-sb.append("平均建物價值最高城市為：").append(cityWithHighestAvgPrice).append("，平均價格為 ").append(highestAvgPrice).append(" 萬");
-
-BufferedWriter writer = new BufferedWriter(new FileWriter("report.txt"));
-writer.write(sb.toString());
-writer.close();
