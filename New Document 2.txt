@@ -1,0 +1,4 @@
+try (BufferedWriter writer = new BufferedWriter(
+        new OutputStreamWriter(new FileOutputStream("city_report.txt"), "UTF-8"))) {
+    writer.write(sb.toString());
+}
