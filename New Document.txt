@@ -1,0 +1,97 @@
+你這個錯誤原因：for迴圈寫成 for (int i = 0; i <= valueList.size(); i++)
+應該是 i < valueList.size();，不是<=。
+
+
+
+說明：
+Java的List索引從0到size()-1，當i等於size時就超界。
+你寫i <= valueList.size()，i最後會等於size，這是不存在的索引。
+
+import java.util.*;
+import java.sql.*;
+
+/**
+ * Hello world!
+ *
+ */
+public class App 
+{
+    public static void main( String[] args ) throws SQLException{
+        String url = "jdbc:mysql://localhost:3306/testdb";
+        String user = "root";
+        String password = "Mysql123!";
+        Connection conn = DriverManager.getConnection(url, user, password);
+        System.out.println("連線成功");
+
+        String targetCity = "台北市";
+
+        PreparedStatement stmt = conn.prepareStatement("SELECT price FROM A WHERE CITY = ?");
+        stmt.setString(1, targetCity);
+        ResultSet rsCityPrice = stmt.executeQuery();
+
+        int cityPrice = 0;
+        if (rsCityPrice.next()) {
+            cityPrice = rsCityPrice.getInt("price");
+            System.out.println(cityPrice);
+        } else {
+            System.out.println("沒有東西 完了");
+        }
+
+        PreparedStatement allstmt = conn.prepareStatement("SELECT ADDRESS, AREA FROM B WHERE LEFT(ADDRESS, 3)=?");
+        allstmt.setString(1, targetCity);
+        ResultSet rs = allstmt.executeQuery();
+
+        List<Building> buildingList = new ArrayList<>();
+        while (rs.next()) {
+            String address = rs.getString("address");
+            int area = rs.getInt("area");
+            buildingList.add(new Building(address, area));
+        }
+
+        if (buildingList.isEmpty()) {
+            System.out.println("buildingList裡面啥都沒有");
+            conn.close();
+            return;
+        }
+
+        List <Double> valueList = new ArrayList<>();
+        
+        double totalArea = 0;
+
+        for (Building b: buildingList) {
+            totalArea += b.getArea();
+            valueList.add((double)b.getArea()*cityPrice);
+
+        }
+
+        int totalAddress = buildingList.size();
+        double avgArea = totalArea/totalAddress;
+        double midArea = getMedian(buildingList.stream().map(b -> (double) b.getArea()).toList());                  //幹這超難
+        double totalValue = totalArea * cityPrice;
+        double avgValue = totalValue / totalAddress;
+        double midValue = getMedian(valueList);//幹超難
+        double maxValue = Collections.max(valueList);
+        double minValue = Collections.min(valueList);
+        String maxValueAddress = "";
+        String minValueAddress = "";
+
+        for (int i = 0;i<=valueList.size(); i++) {
+            if (valueList.get(i) == maxValue) maxValueAddress = buildingList.get(i).getAddress();
+            if (valueList.get(i) == minValue) minValueAddress = buildingList.get(i).getAddress();
+        }
+
+        System.out.println("建物數量: " + totalAddress);
+        System.out.println("總面積: " + totalArea);
+        System.out.println("平均面積: " + avgArea);
+        System.out.println("中位數面積: " + midArea);
+        System.out.println("總價值: " + totalValue);
+        System.out.println("平均價值: " + avgValue);
+        System.out.println("中位數價值: " + midValue);
+        System.out.println("最有價值建物: " + maxValueAddress + "，總價: " + maxValue);
+        System.out.println("最沒價值建物: " + minValueAddress + "，總價: " + minValue);
+
+        conn.close();
+
+
+
+    }
